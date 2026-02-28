@@ -1,3 +1,3 @@
 # arakhim.github.io
 
-permalink: /lca_animated.html
+[Lowest Common Ancestor](https://arakhim.github.io/lca_animated)
