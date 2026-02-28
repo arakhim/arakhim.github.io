@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LCA — Animated</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg: #07080f;
+    --node-default: #1a1d2e;
+    --node-border: #2d3154;
+    --accent: #6366f1;
+    --p-color: #f472b6;
+    --q-color: #34d399;
+    --lca-color: #fbbf24;
+    --path-color: #818cf8;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --line: #1e2240;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 36px 20px 60px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 4px;
+  }
+
+  .subtitle { font-size: 0.68rem; color: var(--muted); margin-bottom: 10px; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* controls */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 30px;
+  }
+
+  .btn {
+    background: #16182e;
+    border: 1px solid var(--accent);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 7px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: .06em;
+    transition: background .2s;
+  }
+  .btn:hover { background: #1e2044; }
+  .btn.active { background: var(--accent); }
+
+  .step-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    min-width: 220px;
+    text-align: center;
+  }
+
+  .step-label span { color: var(--text); font-weight: 600; }
+
+  /* tree */
+  .tree-wrap {
+    position: relative;
+    width: min(720px, 95vw);
+    height: 360px;
+    margin-bottom: 32px;
+  }
+
+  svg.tree-lines {
+    position: absolute; top:0; left:0;
+    width: 100%; height: 100%;
+    overflow: visible;
+  }
+
+  .node {
+    position: absolute;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--node-default);
+    border: 2px solid var(--node-border);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 1rem; font-weight: 600;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    transition: background .4s, border-color .4s, box-shadow .4s, color .4s;
+  }
+
+  .node-label {
+    position: absolute;
+    top: 54px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.52rem;
+    white-space: nowrap;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity .3s, color .3s;
+    pointer-events: none;
+  }
+
+  /* call stack panel */
+  .panel {
+    width: min(720px, 95vw);
+    background: #0e0f1a;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+
+  .panel-title {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .stack-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-height: 36px;
+    align-items: center;
+  }
+
+  .stack-frame {
+    background: #16182e;
+    border: 1px solid var(--node-border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    transition: all .3s;
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  .stack-frame.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .stack-frame.active {
+    border-color: var(--accent);
+    color: var(--text);
+    background: #1a1c38;
+  }
+
+  .stack-frame.returning {
+    border-color: var(--q-color);
+    color: var(--q-color);
+  }
+
+  /* explanation box */
+  .explain {
+    width: min(720px, 95vw);
+    min-height: 56px;
+    background: #0e0f1a;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    color: var(--muted);
+    transition: border-color .3s;
+  }
+
+  .explain strong { color: var(--text); }
+  code { background:#16182e; border-radius:3px; padding:1px 5px; font-size:.65rem; color:var(--path-color); }
+
+  /* pulse ring animation */
+  @keyframes pulse-ring {
+    0% { transform: translate(-50%,-50%) scale(1); opacity: .7; }
+    100% { transform: translate(-50%,-50%) scale(1.7); opacity: 0; }
+  }
+
+  .pulse {
+    position: absolute;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    animation: pulse-ring .8s ease-out forwards;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* travelling dot on edges */
+  .dot-travel {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    transform: translate(-50%,-50%);
+    z-index: 10;
+    pointer-events: none;
+    transition: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lowest Common Ancestor</h1>
+<p class="subtitle">Post-order DFS · p = node 6 · q = node 4</p>
+
+<div class="controls">
+  <button class="btn" id="prevBtn">← Prev</button>
+  <div class="step-label">Step <span id="stepNum">1</span> / <span id="stepTotal">?</span></div>
+  <button class="btn" id="nextBtn">Next →</button>
+  <button class="btn" id="autoBtn">▶ Auto</button>
+</div>
+
+<div class="tree-wrap" id="treeWrap">
+  <svg class="tree-lines" id="lines"></svg>
+
+  <div class="node" id="n3" style="left:50%;top:8%">3<div class="node-label" id="lbl-n3"></div></div>
+  <div class="node" id="n5" style="left:27%;top:30%">5<div class="node-label" id="lbl-n5"></div></div>
+  <div class="node" id="n1" style="left:73%;top:30%">1<div class="node-label" id="lbl-n1"></div></div>
+  <div class="node" id="n6" style="left:15%;top:55%">6<div class="node-label" id="lbl-n6"></div></div>
+  <div class="node" id="n2" style="left:39%;top:55%">2<div class="node-label" id="lbl-n2"></div></div>
+  <div class="node" id="n0" style="left:61%;top:55%">0<div class="node-label" id="lbl-n0"></div></div>
+  <div class="node" id="n8" style="left:83%;top:55%">8<div class="node-label" id="lbl-n8"></div></div>
+  <div class="node" id="n7" style="left:30%;top:80%">7<div class="node-label" id="lbl-n7"></div></div>
+  <div class="node" id="n4" style="left:48%;top:80%">4<div class="node-label" id="lbl-n4"></div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">Call Stack</div>
+  <div class="stack-row" id="stackRow"></div>
+</div>
+
+<div class="explain" id="explain">Press <strong>Next →</strong> or <strong>▶ Auto</strong> to start the animation.</div>
+
+<script>
+const nodePos = {
+  n3:[50,8], n5:[27,30], n1:[73,30],
+  n6:[15,55], n2:[39,55], n0:[61,55], n8:[83,55],
+  n7:[30,80], n4:[48,80]
+};
+
+const edges = [
+  ['n3','n5'],['n3','n1'],
+  ['n5','n6'],['n5','n2'],
+  ['n1','n0'],['n1','n8'],
+  ['n2','n7'],['n2','n4']
+];
+
+// Draw static edges
+const svg = document.getElementById('lines');
+const wrap = document.getElementById('treeWrap');
+
+function drawEdges() {
+  svg.innerHTML = '';
+  const W = wrap.offsetWidth, H = wrap.offsetHeight;
+  edges.forEach(([a,b]) => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    const [ax,ay]=nodePos[a],[bx,by]=nodePos[b];
+    line.setAttribute('x1',ax/100*W); line.setAttribute('y1',ay/100*H);
+    line.setAttribute('x2',bx/100*W); line.setAttribute('y2',by/100*H);
+    line.setAttribute('stroke','#1e2240'); line.setAttribute('stroke-width','1.5');
+    line.setAttribute('id',`edge-${a}-${b}`);
+    svg.appendChild(line);
+  });
+}
+drawEdges();
+window.addEventListener('resize', drawEdges);
+
+// ── STEPS ──────────────────────────────────────────────────────────────────
+// Each step: { active, styles, labels, stack, explain, edgeHighlight, travel }
+// styles: { nodeId: { bg, border, color, shadow } }
+// labels: { nodeId: { text, color } }
+// stack: [ { text, state: 'active'|'returning'|'done'|'' } ]
+// edgeHighlight: [['n3','n5', color]]
+// travel: { from, to, color }  — animate dot along edge
+
+const D = '#1a1d2e', B = '#2d3154'; // default bg, border
+const pC='#f472b6', qC='#34d399', lcaC='#fbbf24', pathC='#818cf8';
+
+const STEPS = [
+  // 1
+  {
+    explain: `<strong>Start</strong> — Call <code>LCA(root=3, p=6, q=4)</code>. We do a post-order DFS: recurse left, then right, then decide.`,
+    active:['n3'], travel:null,
+    styles:{n3:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`}},
+    labels:{}, stack:[{text:'LCA(3)',state:'active'}], edgeHighlight:[],
+  },
+  // 2 — 3 goes left to 5
+  {
+    explain: `<strong>3 → recurse left → 5</strong> — root(3) is not null and not p/q. Call <code>LCA(5)</code>.`,
+    active:['n5'], travel:{from:'n3',to:'n5',color:pathC},
+    styles:{
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+      n5:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{}, stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:'active'}],
+    edgeHighlight:[['n3','n5',pathC]],
+  },
+  // 3 — 5 goes left to 6
+  {
+    explain: `<strong>5 → recurse left → 6</strong> — root(5) is not p or q. Call <code>LCA(6)</code>.`,
+    active:['n6'], travel:{from:'n5',to:'n6',color:pathC},
+    styles:{
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+      n5:{bg:'#10122a',border:pathC,color:pathC},
+      n6:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{}, stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:''},{text:'LCA(6)',state:'active'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC]],
+  },
+  // 4 — 6 == p → return 6
+  {
+    explain: `<strong>Base case: root == p</strong> — <code>root(6) == p</code>! Return <code>node 6</code> immediately.`,
+    active:['n6'], travel:null,
+    styles:{n6:{bg:'#2a0a1a',border:pC,color:pC,shadow:`0 0 24px rgba(244,114,182,.5)`}},
+    labels:{'lbl-n6':{text:'✓ root==p → return 6',color:pC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:'active'},{text:'LCA(6) → 6',state:'returning'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC]],
+  },
+  // 5 — 5 goes right to 2
+  {
+    explain: `<strong>5 → recurse right → 2</strong> — <code>left = node 6</code> (non-null). Now call <code>LCA(2)</code> on the right child.`,
+    active:['n2'], travel:{from:'n5',to:'n2',color:pathC},
+    styles:{
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+      n5:{bg:'#10122a',border:pathC,color:pathC},
+      n6:{bg:'#2a0a1a',border:pC,color:pC},
+      n2:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n6':{text:'returned p(6)',color:pC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:''},{text:'LCA(2)',state:'active'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC],['n5','n2',pathC]],
+  },
+  // 6 — 2 goes left to 7
+  {
+    explain: `<strong>2 → recurse left → 7</strong> — root(2) is not p or q. Call <code>LCA(7)</code>.`,
+    active:['n7'], travel:{from:'n2',to:'n7',color:pathC},
+    styles:{
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+      n5:{bg:'#10122a',border:pathC,color:pathC},
+      n6:{bg:'#2a0a1a',border:pC,color:pC},
+      n2:{bg:'#10122a',border:pathC,color:pathC},
+      n7:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n6':{text:'returned p(6)',color:pC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:''},{text:'LCA(2)',state:''},{text:'LCA(7)',state:'active'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC],['n5','n2',pathC],['n2','n7',pathC]],
+  },
+  // 7 — 7 returns null
+  {
+    explain: `<strong>Node 7 → returns null</strong> — Not p or q. No children → returns <code>null</code>.`,
+    active:['n7'], travel:null,
+    styles:{n7:{bg:D,border:'#333',color:'#555',shadow:'none'}},
+    labels:{'lbl-n7':{text:'→ null',color:'#555'},'lbl-n6':{text:'returned p(6)',color:pC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:''},{text:'LCA(2)',state:'active'},{text:'LCA(7) → null',state:'returning'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC],['n5','n2',pathC]],
+  },
+  // 8 — 2 goes right to 4
+  {
+    explain: `<strong>2 → recurse right → 4</strong> — <code>left=null</code>. Now call <code>LCA(4)</code>.`,
+    active:['n4'], travel:{from:'n2',to:'n4',color:pathC},
+    styles:{
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+      n5:{bg:'#10122a',border:pathC,color:pathC},
+      n6:{bg:'#2a0a1a',border:pC,color:pC},
+      n2:{bg:'#10122a',border:pathC,color:pathC},
+      n4:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n6':{text:'returned p(6)',color:pC},'lbl-n7':{text:'→ null',color:'#555'}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:''},{text:'LCA(2)',state:''},{text:'LCA(4)',state:'active'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC],['n5','n2',pathC],['n2','n4',pathC]],
+  },
+  // 9 — 4 == q → return 4
+  {
+    explain: `<strong>Base case: root == q</strong> — <code>root(4) == q</code>! Return <code>node 4</code> immediately.`,
+    active:['n4'], travel:null,
+    styles:{n4:{bg:'#00231a',border:qC,color:qC,shadow:`0 0 24px rgba(52,211,153,.5)`}},
+    labels:{'lbl-n4':{text:'✓ root==q → return 4',color:qC},'lbl-n6':{text:'returned p(6)',color:pC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:''},{text:'LCA(2)',state:'active'},{text:'LCA(4) → 4',state:'returning'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC],['n5','n2',pathC],['n2','n4',pathC]],
+  },
+  // 10 — node 2: left=null, right=4 → return 4
+  {
+    explain: `<strong>Node 2 evaluates</strong> — <code>left=null</code>, <code>right=node 4</code>. Only one side non-null → <code>return left or right = node 4</code>.`,
+    active:['n2'], travel:null,
+    styles:{
+      n6:{bg:'#2a0a1a',border:pC,color:pC},
+      n4:{bg:'#00231a',border:qC,color:qC},
+      n2:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 18px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n6':{text:'returned p(6)',color:pC},'lbl-n4':{text:'returned q(4)',color:qC},'lbl-n2':{text:'→ returns 4',color:pathC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(5)',state:'active'},{text:'LCA(2) → 4',state:'returning'}],
+    edgeHighlight:[['n3','n5',pathC],['n5','n6',pathC],['n5','n2',pathC]],
+  },
+  // 11 — node 5: left=6 (p), right=4 (q) → BOTH non-null → node 5 is LCA!
+  {
+    explain: `<strong>🔑 Node 5: left=p(6) AND right=q(4)</strong> — <code>left</code> and <code>right</code> are BOTH non-null! p and q are in opposite subtrees → <strong>node 5 is the LCA!</strong> Return root(5).`,
+    active:['n5'], travel:null,
+    styles:{
+      n5:{bg:'#2a1f00',border:lcaC,color:lcaC,shadow:`0 0 32px rgba(251,191,36,.65)`},
+      n6:{bg:'#2a0a1a',border:pC,color:pC,shadow:`0 0 14px rgba(244,114,182,.3)`},
+      n4:{bg:'#00231a',border:qC,color:qC,shadow:`0 0 14px rgba(52,211,153,.3)`},
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+    },
+    labels:{
+      'lbl-n5':{text:'⭐ left&&right → LCA!',color:lcaC},
+      'lbl-n6':{text:'p found here',color:pC},
+      'lbl-n4':{text:'q found here',color:qC},
+    },
+    stack:[{text:'LCA(3)',state:'active'},{text:'LCA(5) → 5 ⭐',state:'returning'}],
+    edgeHighlight:[['n3','n5',lcaC],['n5','n6',pC],['n5','n2',qC],['n2','n4',qC]],
+  },
+  // 12 — node 3: left=5(LCA), right=? — still need right subtree
+  {
+    explain: `<strong>3 → recurse right → 1</strong> — <code>left = node 5</code> returned. Node 3 still recurses right: call <code>LCA(1)</code>. (Post-order always checks both sides.)`,
+    active:['n1'], travel:{from:'n3',to:'n1',color:pathC},
+    styles:{
+      n5:{bg:'#2a1f00',border:lcaC,color:lcaC,shadow:`0 0 18px rgba(251,191,36,.35)`},
+      n3:{bg:'#10122a',border:pathC,color:pathC},
+      n1:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n5':{text:'returned LCA(5)',color:lcaC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(1)',state:'active'}],
+    edgeHighlight:[['n3','n5',lcaC],['n3','n1',pathC]],
+  },
+  // 13 — 1 goes left to 0
+  {
+    explain: `<strong>1 → recurse left → 0</strong> — root(1) is not p or q. Call <code>LCA(0)</code>.`,
+    active:['n0'], travel:{from:'n1',to:'n0',color:pathC},
+    styles:{
+      n5:{bg:'#2a1f00',border:lcaC,color:lcaC},
+      n1:{bg:'#10122a',border:pathC,color:pathC},
+      n0:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n5':{text:'returned LCA(5)',color:lcaC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(1)',state:''},{text:'LCA(0)',state:'active'}],
+    edgeHighlight:[['n3','n5',lcaC],['n3','n1',pathC],['n1','n0',pathC]],
+  },
+  // 14 — 0 returns null
+  {
+    explain: `<strong>Node 0 → returns null</strong> — Not p or q. No children → returns <code>null</code>.`,
+    active:['n0'], travel:null,
+    styles:{n0:{bg:D,border:'#333',color:'#555',shadow:'none'}},
+    labels:{'lbl-n0':{text:'→ null',color:'#555'},'lbl-n5':{text:'returned LCA(5)',color:lcaC}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(1)',state:'active'},{text:'LCA(0) → null',state:'returning'}],
+    edgeHighlight:[['n3','n5',lcaC],['n3','n1',pathC]],
+  },
+  // 15 — 1 goes right to 8
+  {
+    explain: `<strong>1 → recurse right → 8</strong> — <code>left=null</code>. Call <code>LCA(8)</code>.`,
+    active:['n8'], travel:{from:'n1',to:'n8',color:pathC},
+    styles:{
+      n5:{bg:'#2a1f00',border:lcaC,color:lcaC},
+      n1:{bg:'#10122a',border:pathC,color:pathC},
+      n8:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 20px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n5':{text:'returned LCA(5)',color:lcaC},'lbl-n0':{text:'→ null',color:'#555'}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(1)',state:''},{text:'LCA(8)',state:'active'}],
+    edgeHighlight:[['n3','n5',lcaC],['n3','n1',pathC],['n1','n8',pathC]],
+  },
+  // 16 — 8 returns null
+  {
+    explain: `<strong>Node 8 → returns null</strong> — Not p or q. No children → returns <code>null</code>.`,
+    active:['n8'], travel:null,
+    styles:{n8:{bg:D,border:'#333',color:'#555',shadow:'none'}},
+    labels:{'lbl-n8':{text:'→ null',color:'#555'},'lbl-n5':{text:'returned LCA(5)',color:lcaC},'lbl-n0':{text:'→ null',color:'#555'}},
+    stack:[{text:'LCA(3)',state:''},{text:'LCA(1)',state:'active'},{text:'LCA(8) → null',state:'returning'}],
+    edgeHighlight:[['n3','n5',lcaC],['n3','n1',pathC]],
+  },
+  // 17 — node 1: left=null, right=null → null
+  {
+    explain: `<strong>Node 1 → returns null</strong> — <code>left=null, right=null</code> → returns <code>null</code>. Right subtree of 3 has no match.`,
+    active:['n1'], travel:null,
+    styles:{n1:{bg:D,border:'#333',color:'#555',shadow:'none'}},
+    labels:{'lbl-n1':{text:'→ null',color:'#555'},'lbl-n5':{text:'returned LCA(5)',color:lcaC}},
+    stack:[{text:'LCA(3)',state:'active'},{text:'LCA(1) → null',state:'returning'}],
+    edgeHighlight:[['n3','n5',lcaC]],
+  },
+  // 18 — node 3: left=5, right=null → return 5
+  {
+    explain: `<strong>Node 3 evaluates</strong> — <code>left=node 5</code> (non-null), <code>right=null</code>. Not a split → <code>return left or right = node 5</code>. The LCA propagates to the caller.`,
+    active:['n3'], travel:null,
+    styles:{
+      n5:{bg:'#2a1f00',border:lcaC,color:lcaC,shadow:`0 0 22px rgba(251,191,36,.5)`},
+      n3:{bg:'#10122a',border:pathC,color:pathC,shadow:`0 0 18px rgba(129,140,248,.4)`},
+    },
+    labels:{'lbl-n5':{text:'⭐ LCA',color:lcaC},'lbl-n1':{text:'→ null',color:'#555'}},
+    stack:[{text:'LCA(3) → 5 ⭐',state:'returning'}],
+    edgeHighlight:[['n3','n5',lcaC]],
+  },
+  // 19 — Final
+  {
+    explain: `<strong>🎉 Answer: node 5</strong> — Node 5 is the LCA of p=6 and q=4. It's the deepest node where one target was found in its left subtree and the other in its right subtree.`,
+    active:['n5'], travel:null,
+    styles:{
+      n5:{bg:'#2a1f00',border:lcaC,color:lcaC,shadow:`0 0 36px rgba(251,191,36,.7)`},
+      n6:{bg:'#2a0a1a',border:pC,color:pC,shadow:`0 0 16px rgba(244,114,182,.4)`},
+      n4:{bg:'#00231a',border:qC,color:qC,shadow:`0 0 16px rgba(52,211,153,.4)`},
+    },
+    labels:{
+      'lbl-n5':{text:'⭐ LCA = node 5',color:lcaC},
+      'lbl-n6':{text:'p = 6',color:pC},
+      'lbl-n4':{text:'q = 4',color:qC},
+    },
+    stack:[{text:'final answer = node 5 ⭐',state:'returning'}],
+    edgeHighlight:[['n3','n5',lcaC],['n5','n6',pC],['n5','n2',qC],['n2','n4',qC]],
+  },
+];
+
+document.getElementById('stepTotal').textContent = STEPS.length;
+
+let current = 0;
+let autoTimer = null;
+
+function applyStep(idx) {
+  const step = STEPS[idx];
+  document.getElementById('stepNum').textContent = idx + 1;
+
+  // reset all nodes
+  Object.keys(nodePos).forEach(id => {
+    const el = document.getElementById(id);
+    el.style.background = D;
+    el.style.borderColor = B;
+    el.style.color = 'var(--text)';
+    el.style.boxShadow = 'none';
+  });
+
+  // reset all labels
+  Object.keys(nodePos).forEach(id => {
+    const lbl = document.getElementById('lbl-'+id);
+    if (lbl) { lbl.style.opacity = '0'; lbl.textContent = ''; }
+  });
+
+  // apply styles
+  if (step.styles) {
+    Object.entries(step.styles).forEach(([id,s]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (s.bg) el.style.background = s.bg;
+      if (s.border) el.style.borderColor = s.border;
+      if (s.color) el.style.color = s.color;
+      if (s.shadow) el.style.boxShadow = s.shadow;
+    });
+  }
+
+  // apply labels
+  if (step.labels) {
+    Object.entries(step.labels).forEach(([id,l]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = l.text;
+      el.style.color = l.color;
+      el.style.opacity = '1';
+    });
+  }
+
+  // edge highlights
+  edges.forEach(([a,b]) => {
+    const line = document.getElementById(`edge-${a}-${b}`);
+    if (line) { line.setAttribute('stroke','#1e2240'); line.setAttribute('stroke-width','1.5'); line.removeAttribute('stroke-dasharray'); }
+  });
+
+  if (step.edgeHighlight) {
+    step.edgeHighlight.forEach(([a,b,color]) => {
+      const line = document.getElementById(`edge-${a}-${b}`);
+      if (line) {
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width','2.5');
+        line.setAttribute('stroke-dasharray','6,3');
+      }
+    });
+  }
+
+  // call stack
+  const stackRow = document.getElementById('stackRow');
+  stackRow.innerHTML = '';
+  if (step.stack) {
+    step.stack.forEach((s,i) => {
+      const frame = document.createElement('div');
+      frame.className = 'stack-frame';
+      frame.textContent = s.text;
+      if (s.state === 'active') frame.classList.add('active');
+      if (s.state === 'returning') frame.classList.add('returning');
+      stackRow.appendChild(frame);
+      setTimeout(() => frame.classList.add('visible'), 30 * i);
+    });
+  }
+
+  // explanation
+  document.getElementById('explain').innerHTML = step.explain;
+
+  // pulse on active nodes
+  if (step.active) {
+    step.active.forEach(id => {
+      const el = document.getElementById(id);
+      const pulse = document.createElement('div');
+      pulse.className = 'pulse';
+      const s = step.styles && step.styles[id];
+      pulse.style.color = s && s.border ? s.border : 'var(--path-color)';
+      pulse.style.left = el.style.left;
+      pulse.style.top = el.style.top;
+      wrap.appendChild(pulse);
+      setTimeout(() => pulse.remove(), 900);
+    });
+  }
+
+  // travelling dot
+  if (step.travel) {
+    animateDot(step.travel.from, step.travel.to, step.travel.color);
+  }
+}
+
+function animateDot(fromId, toId, color) {
+  const W = wrap.offsetWidth, H = wrap.offsetHeight;
+  const [fx,fy] = nodePos[fromId], [tx,ty] = nodePos[toId];
+  const dot = document.createElement('div');
+  dot.className = 'dot-travel';
+  dot.style.background = color;
+  dot.style.boxShadow = `0 0 8px ${color}`;
+  dot.style.left = (fx/100*W) + 'px';
+  dot.style.top  = (fy/100*H) + 'px';
+  wrap.appendChild(dot);
+
+  const duration = 500;
+  const start = performance.now();
+  function frame(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+    dot.style.left = ((fx + (tx-fx)*ease)/100*W) + 'px';
+    dot.style.top  = ((fy + (ty-fy)*ease)/100*H) + 'px';
+    if (t < 1) requestAnimationFrame(frame);
+    else dot.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
+function goTo(idx) {
+  current = Math.max(0, Math.min(STEPS.length-1, idx));
+  applyStep(current);
+  document.getElementById('prevBtn').disabled = current === 0;
+  document.getElementById('nextBtn').disabled = current === STEPS.length-1;
+}
+
+document.getElementById('prevBtn').addEventListener('click', () => { stopAuto(); goTo(current-1); });
+document.getElementById('nextBtn').addEventListener('click', () => { stopAuto(); goTo(current+1); });
+
+document.getElementById('autoBtn').addEventListener('click', () => {
+  if (autoTimer) { stopAuto(); return; }
+  document.getElementById('autoBtn').textContent = '⏸ Pause';
+  document.getElementById('autoBtn').classList.add('active');
+  if (current === STEPS.length-1) goTo(0);
+  autoTimer = setInterval(() => {
+    if (current >= STEPS.length-1) { stopAuto(); return; }
+    goTo(current+1);
+  }, 1800);
+});
+
+function stopAuto() {
+  clearInterval(autoTimer); autoTimer = null;
+  document.getElementById('autoBtn').textContent = '▶ Auto';
+  document.getElementById('autoBtn').classList.remove('active');
+}
+
+goTo(0);
+</script>
+</body>
+</html>
